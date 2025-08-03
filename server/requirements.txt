@@ -1,0 +1,31 @@
+# FastAPI and Web Framework
+fastapi==0.116.1
+uvicorn==0.35.0
+python-multipart==0.0.20
+
+# Data Processing and Excel Handling
+pandas==2.2.3
+openpyxl==3.1.5
+xlrd==2.0.2
+xlsxwriter==3.2.5
+
+# OpenAI and AI Services
+openai==1.97.1
+llama-cloud-services==0.6.43
+llama-parse==0.6.30
+
+# Environment and Configuration
+python-dotenv==1.1.1
+
+# HTTP and Networking
+httpx==0.28.1
+requests==2.32.4
+
+# Data Validation and Serialization
+pydantic==2.11.7
+pydantic-core==2.33.2
+
+# Utilities
+python-dateutil==2.9.0.post0
+pytz==2025.2
+
