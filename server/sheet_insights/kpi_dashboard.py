@@ -11,7 +11,7 @@ from dotenv import load_dotenv
 logger = logging.getLogger(__name__)
 
 # Load environment variables
-load_dotenv()
+load_dotenv("Acma_Insights\server\.env")
 
 client = AzureOpenAI(
     api_key=os.getenv("AZURE_OPENAI_API_KEY"),
@@ -112,10 +112,11 @@ def get_all_supplier_kpi_json(csv_folder: Path = Path("results/csv_output"), out
         }
     }
 
+    # Note: AZURE_OPENAI_DEPLOYMENT is not actually used in this function
+    # but keeping the check for future use if needed
     deployment_name = os.getenv("AZURE_OPENAI_DEPLOYMENT")
     if not deployment_name:
-        logger.error("AZURE_OPENAI_DEPLOYMENT environment variable not set")
-        return None
+        logger.warning("AZURE_OPENAI_DEPLOYMENT environment variable not set - continuing without it")
 
     csv_files = list(csv_folder.glob("*.csv"))
     logger.info(f"Found {len(csv_files)} CSV files: {[f.name for f in csv_files]}")

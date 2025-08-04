@@ -1,28 +1,21 @@
 import os
 from dotenv import load_dotenv
+from pathlib import Path
+
+# Load .env file robustly - look in the server directory (parent of sheet_insights)
+env_path = Path(__file__).parent.parent / ".env"
+load_dotenv(str(env_path))
+
+# Debug: Check if environment variables are loaded
+api_key = os.getenv("AZURE_OPENAI_API_KEY")
+azure_endpoint = os.getenv("AZURE_ENDPOINT")
+# Azure OpenAI library expects OPENAI_API_VERSION, not AZURE_OPENAI_API_VERSION
+api_version = os.getenv("OPENAI_API_VERSION") or os.getenv("AZURE_OPENAI_API_VERSION")
+
 from openai import AzureOpenAI
 
-load_dotenv()
-
-AZURE_API_KEY = os.getenv("AZURE_OPENAI_API_KEY")
-AZURE_ENDPOINT = os.getenv("AZURE_ENDPOINT")
-AZURE_DEPLOYMENT = os.getenv("AZURE_OPENAI_DEPLOYMENT")
-
 client = AzureOpenAI(
-    api_key=AZURE_API_KEY,
-    azure_endpoint=AZURE_ENDPOINT,
-    api_version="2025-01-01-preview"
+    api_key=api_key,
+    azure_endpoint=azure_endpoint,
+    api_version=api_version,
 )
-
-from llama_cloud_services import LlamaParse
-
-# Optimize LlamaParse for faster processing
-parser = LlamaParse(
-    api_key=os.getenv("LLAMA_API_KEY"),
-    num_workers=4,  # Increased from 1 to 4 for parallel processing
-    verbose=True,
-    language="en",
-    show_progress=True,  # Show progress for better user experience
-    fast_mode=True,  # Enable fast mode for quicker processing
-)
-

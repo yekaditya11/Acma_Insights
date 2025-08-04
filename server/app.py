@@ -139,6 +139,16 @@ async def upload_excel(file: UploadFile = File(...)):
         raise HTTPException(status_code=400, detail="Only .xlsx files are supported.")
 
     file_path = UPLOAD_DIR / file.filename
+    
+    # Remove existing file with the same name if it exists
+    if file_path.exists():
+        try:
+            file_path.unlink()
+            logger.info(f"Removed existing file: {file_path.name}")
+        except Exception as e:
+            logger.warning(f"Failed to remove existing file {file_path.name}: {e}")
+    
+    # Save the new file
     with open(file_path, "wb") as f:
         shutil.copyfileobj(file.file, f)
 
@@ -167,12 +177,21 @@ async def upload_excel(file: UploadFile = File(...)):
                 detail=f"No processable sheets found. Available sheets: {all_sheet_names}. Excluded: {EXCLUDED_SHEETS}"
             )
 
-        # Check for existing CSV files
-        existing_csv_files = []
-        missing_csv_files = []
+        # Always regenerate CSV files when a new Excel file is uploaded
+        logger.info("Regenerating all CSV files for the new Excel file...")
+        
+        # Remove existing CSV files to force regeneration
+        for sheet in sheets_to_process:
+            csv_path = CSV_DIR / normalize_filename(sheet)
+            if csv_path.exists():
+                try:
+                    csv_path.unlink()
+                    logger.info(f"Removed existing CSV: {csv_path}")
+                except Exception as e:
+                    logger.warning(f"Failed to remove existing CSV {csv_path}: {e}")
         
         # Check which sheets have meaningful content
-        workbook = openpyxl.load_workbook(str(file_path), read_only=True)
+        workbook = openpyxl.load_workbook(str(file_path), read_only=True, data_only=True)
         sheets_with_content = []
         
         for sheet_name in sheets_to_process:
@@ -193,27 +212,13 @@ async def upload_excel(file: UploadFile = File(...)):
         
         workbook.close()
         
-        for sheet in sheets_to_process:
-            csv_path = CSV_DIR / normalize_filename(sheet)
-            if csv_path.exists():
-                existing_csv_files.append(sheet)
-                logger.info(f"Found existing CSV: {csv_path}")
-            elif sheet in sheets_with_content:
-                missing_csv_files.append(sheet)
-                logger.info(f"Missing CSV: {csv_path}")
-            else:
-                logger.info(f"Skipping empty sheet: {sheet}")
-
-        logger.info(f"Existing CSV files: {len(existing_csv_files)}")
-        logger.info(f"Missing CSV files: {len(missing_csv_files)}")
-
-        # Generate missing CSV files
-        if missing_csv_files:
-            logger.info(f"Generating CSV files for sheets: {missing_csv_files}")
+        # Generate all CSV files for sheets with content
+        if sheets_with_content:
+            logger.info(f"Generating CSV files for sheets: {sheets_with_content}")
             csv_paths, name_mapping = extract_csv(
                 str(file_path),
                 CSV_DIR,
-                sheets_to_process=missing_csv_files,
+                sheets_to_process=sheets_with_content,
                 skip_first_sheet=False,
             )
             
@@ -224,9 +229,8 @@ async def upload_excel(file: UploadFile = File(...)):
             # Don't fail if no CSV files were generated - this can happen with empty sheets
             if len(actual_csv_paths) == 0:
                 logger.warning("No CSV files were generated. This could be due to sheets having no meaningful content.")
-                logger.warning("Continuing with existing CSV files...")
         else:
-            logger.info("All CSV files already exist. Skipping generation.")
+            logger.warning("No sheets with meaningful content found.")
             actual_csv_paths = []
             name_mapping = {}
 
