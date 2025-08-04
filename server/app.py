@@ -7,6 +7,8 @@ import os
 import json
 import logging
 import openpyxl
+import time
+from datetime import datetime
 
 from sheet_insights.parser import extract_csv, get_sheet_names, normalize_sheet_name
 from sheet_insights.insights import get_insights
@@ -47,6 +49,67 @@ for folder in [UPLOAD_DIR, CSV_DIR, RESULTS_DIR]:
 def normalize_filename(sheet_name: str) -> str:
     """Use consistent normalization with parser.py"""
     return normalize_sheet_name(sheet_name) + ".csv"
+
+def save_execution_times(timing_data: dict, output_file: str = "execution_times.md"):
+    """Save execution timing data to a markdown file"""
+    try:
+        timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+        
+        # Create markdown content
+        markdown_content = f"""# Execution Times Report
+
+**Generated on:** {timestamp}
+
+## Summary
+- **Total Execution Time:** {timing_data.get('total_time', 0):.2f} seconds
+- **CSV Generation Time:** {timing_data.get('csv_generation_time', 0):.2f} seconds
+- **KPI Processing Time:** {timing_data.get('kpi_processing_time', 0):.2f} seconds
+- **Insights Generation Time:** {timing_data.get('insights_generation_time', 0):.2f} seconds
+- **General Insights Time:** {timing_data.get('general_insights_time', 0):.2f} seconds
+
+## Detailed Breakdown
+
+### CSV File Generation
+- **Time:** {timing_data.get('csv_generation_time', 0):.2f} seconds
+- **Files Generated:** {timing_data.get('csv_files_generated', 0)}
+- **Files Reused:** {timing_data.get('csv_files_reused', 0)}
+- **Status:** {timing_data.get('csv_status', 'Unknown')}
+
+### KPI Processing
+- **Time:** {timing_data.get('kpi_processing_time', 0):.2f} seconds
+- **Suppliers Processed:** {timing_data.get('suppliers_processed', 0)}
+- **Status:** {timing_data.get('kpi_status', 'Unknown')}
+
+### Insights Generation
+- **Time:** {timing_data.get('insights_generation_time', 0):.2f} seconds
+- **Status:** {timing_data.get('insights_status', 'Unknown')}
+
+### General Insights
+- **Time:** {timing_data.get('general_insights_time', 0):.2f} seconds
+- **Status:** {timing_data.get('general_insights_status', 'Unknown')}
+
+## Performance Notes
+- **Cache Used:** {timing_data.get('cache_used', False)}
+- **Force Regenerate:** {timing_data.get('force_regenerate', False)}
+- **Files Processed:** {timing_data.get('total_files', 0)}
+
+---
+*Report generated automatically by the Excel Parser API*
+"""
+        
+        # Save to file
+        output_path = Path("results") / output_file
+        output_path.parent.mkdir(parents=True, exist_ok=True)
+        
+        with open(output_path, "w", encoding="utf-8") as f:
+            f.write(markdown_content)
+        
+        logger.info(f"Execution times saved to: {output_path}")
+        return str(output_path)
+        
+    except Exception as e:
+        logger.error(f"Failed to save execution times: {e}")
+        return None
 
 @app.get("/")
 def read_root():
@@ -133,8 +196,28 @@ def generate_more_insights():
         raise HTTPException(status_code=500, detail=f"Failed to generate more insights: {str(e)}")
 
 @app.post("/upload_excel/")
-async def upload_excel(file: UploadFile = File(...)):
+async def upload_excel(file: UploadFile = File(...), force_regenerate: bool = False):
     """Upload and process Excel file"""
+    # Initialize timing data
+    timing_data = {
+        'total_time': 0,
+        'csv_generation_time': 0,
+        'kpi_processing_time': 0,
+        'insights_generation_time': 0,
+        'general_insights_time': 0,
+        'csv_files_generated': 0,
+        'csv_files_reused': 0,
+        'cache_used': False,
+        'force_regenerate': force_regenerate,
+        'total_files': 0,
+        'csv_status': 'Unknown',
+        'kpi_status': 'Unknown',
+        'insights_status': 'Unknown',
+        'general_insights_status': 'Unknown'
+    }
+    
+    start_time = time.time()
+    
     if not file.filename.endswith(".xlsx"):
         raise HTTPException(status_code=400, detail="Only .xlsx files are supported.")
 
@@ -177,18 +260,23 @@ async def upload_excel(file: UploadFile = File(...)):
                 detail=f"No processable sheets found. Available sheets: {all_sheet_names}. Excluded: {EXCLUDED_SHEETS}"
             )
 
-        # Always regenerate CSV files when a new Excel file is uploaded
-        logger.info("Regenerating all CSV files for the new Excel file...")
+        # Check for existing CSV files and only generate missing ones
+        if force_regenerate:
+            logger.info("Force regenerate mode: Removing all existing CSV files...")
+            # Remove all existing CSV files to force regeneration
+            for sheet in sheets_to_process:
+                csv_path = CSV_DIR / normalize_filename(sheet)
+                if csv_path.exists():
+                    try:
+                        csv_path.unlink()
+                        logger.info(f"Removed existing CSV: {csv_path}")
+                    except Exception as e:
+                        logger.warning(f"Failed to remove existing CSV {csv_path}: {e}")
         
-        # Remove existing CSV files to force regeneration
-        for sheet in sheets_to_process:
-            csv_path = CSV_DIR / normalize_filename(sheet)
-            if csv_path.exists():
-                try:
-                    csv_path.unlink()
-                    logger.info(f"Removed existing CSV: {csv_path}")
-                except Exception as e:
-                    logger.warning(f"Failed to remove existing CSV {csv_path}: {e}")
+        logger.info("Checking for existing CSV files...")
+        
+        existing_csv_files = []
+        missing_csv_files = []
         
         # Check which sheets have meaningful content
         workbook = openpyxl.load_workbook(str(file_path), read_only=True, data_only=True)
@@ -212,13 +300,30 @@ async def upload_excel(file: UploadFile = File(...)):
         
         workbook.close()
         
-        # Generate all CSV files for sheets with content
-        if sheets_with_content:
-            logger.info(f"Generating CSV files for sheets: {sheets_with_content}")
+        # Check which CSV files exist vs need to be created
+        for sheet in sheets_to_process:
+            csv_path = CSV_DIR / normalize_filename(sheet)
+            if csv_path.exists():
+                existing_csv_files.append(sheet)
+                logger.info(f"Found existing CSV: {csv_path}")
+            elif sheet in sheets_with_content:
+                missing_csv_files.append(sheet)
+                logger.info(f"Missing CSV: {csv_path}")
+            else:
+                logger.info(f"Skipping empty sheet: {sheet}")
+
+        logger.info(f"Existing CSV files: {len(existing_csv_files)}")
+        logger.info(f"Missing CSV files: {len(missing_csv_files)}")
+
+        # Generate only missing CSV files
+        csv_start_time = time.time()
+        
+        if missing_csv_files:
+            logger.info(f"Generating missing CSV files for sheets: {missing_csv_files}")
             csv_paths, name_mapping = extract_csv(
                 str(file_path),
                 CSV_DIR,
-                sheets_to_process=sheets_with_content,
+                sheets_to_process=missing_csv_files,
                 skip_first_sheet=False,
             )
             
@@ -229,10 +334,19 @@ async def upload_excel(file: UploadFile = File(...)):
             # Don't fail if no CSV files were generated - this can happen with empty sheets
             if len(actual_csv_paths) == 0:
                 logger.warning("No CSV files were generated. This could be due to sheets having no meaningful content.")
+            
+            timing_data['csv_files_generated'] = len(actual_csv_paths)
+            timing_data['csv_files_reused'] = len(existing_csv_files)
+            timing_data['csv_status'] = 'Generated new files'
         else:
-            logger.warning("No sheets with meaningful content found.")
+            logger.info("All required CSV files already exist. Skipping generation.")
             actual_csv_paths = []
             name_mapping = {}
+            timing_data['csv_files_generated'] = 0
+            timing_data['csv_files_reused'] = len(existing_csv_files)
+            timing_data['csv_status'] = 'Used existing files'
+        
+        timing_data['csv_generation_time'] = time.time() - csv_start_time
 
         # Collect all available CSV files
         all_csv_paths = []
@@ -261,29 +375,60 @@ async def upload_excel(file: UploadFile = File(...)):
             )
 
         # Process KPIs and insights
+        kpi_start_time = time.time()
         logger.info("Generating supplier KPI data...")
-        supplier_kpi_info = get_all_supplier_kpi_json()
+        supplier_kpi_info = get_all_supplier_kpi_json(force_regenerate=force_regenerate)
         logger.info("Created final_supplier_kpis.json")
+        
 
+        
+        timing_data['kpi_processing_time'] = time.time() - kpi_start_time
+        timing_data['kpi_status'] = 'Completed'
+
+        # Generate insights
+        insights_start_time = time.time()
         logger.info("Generating insights...")
         insights = get_insights()
         with open(INSIGHTS_FILE, "w", encoding='utf-8') as f:
             json.dump(insights, f, indent=2, ensure_ascii=False)
         logger.info(f"Saved insights to: {INSIGHTS_FILE}")
+        timing_data['insights_generation_time'] = time.time() - insights_start_time
+        timing_data['insights_status'] = 'Completed'
 
+        # Generate general insights
+        general_start_time = time.time()
         logger.info("Generating general insights...")
         general = generate_general_insights()
+        timing_data['general_insights_time'] = time.time() - general_start_time
+        timing_data['general_insights_status'] = 'Completed'
 
         # Load insights for response
         with open(INSIGHTS_FILE, "r", encoding="utf-8") as f:
             insights_content = json.load(f)
 
+        # Calculate total time and finalize timing data
+        timing_data['total_time'] = time.time() - start_time
+        timing_data['total_files'] = len(all_csv_paths)
+        
+        # Save execution times to markdown file
+        timing_file_path = save_execution_times(timing_data)
+        
         logger.info("Processing completed successfully.")
+        logger.info(f"Total execution time: {timing_data['total_time']:.2f} seconds")
+        logger.info(f"Execution times saved to: {timing_file_path}")
 
         return {
             "insights": insights_content,
             "general-insights": general,
-            "Supplier-KPIs": supplier_kpi_info
+            "Supplier-KPIs": supplier_kpi_info,
+            "execution_times": {
+                "total_time": f"{timing_data['total_time']:.2f}s",
+                "csv_generation": f"{timing_data['csv_generation_time']:.2f}s",
+                "kpi_processing": f"{timing_data['kpi_processing_time']:.2f}s",
+                "insights_generation": f"{timing_data['insights_generation_time']:.2f}s",
+                "general_insights": f"{timing_data['general_insights_time']:.2f}s",
+                "timing_report": timing_file_path
+            }
         }
 
     except HTTPException:
