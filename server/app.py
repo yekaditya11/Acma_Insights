@@ -315,7 +315,6 @@ async def upload_excel(file: UploadFile = File(...), force_regenerate: bool = Fa
         logger.info(f"Existing CSV files: {len(existing_csv_files)}")
         logger.info(f"Missing CSV files: {len(missing_csv_files)}")
 
-        # Generate only missing CSV files
         csv_start_time = time.time()
         
         if missing_csv_files:

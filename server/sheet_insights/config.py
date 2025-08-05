@@ -19,3 +19,4 @@ client = AzureOpenAI(
     azure_endpoint=azure_endpoint,
     api_version=api_version,
 )
+
