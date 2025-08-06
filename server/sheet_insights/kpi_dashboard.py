@@ -11,7 +11,7 @@ from dotenv import load_dotenv
 logger = logging.getLogger(__name__)
 
 # Load environment variables
-load_dotenv()
+load_dotenv("Acma_Insights\server\.env")
 
 client = AzureOpenAI(
     api_key=os.getenv("AZURE_OPENAI_API_KEY"),
@@ -87,7 +87,7 @@ def parse_monthly_data_from_row(row, data_start_col):
     
     return monthly_data
 
-def get_all_supplier_kpi_json(csv_folder: Path = Path("results/csv_output"), output_path: Path = Path("results/final_supplier_kpis.json")):
+def get_all_supplier_kpi_json(csv_folder: Path = Path("results/csv_output"), output_path: Path = Path("results/final_supplier_kpis.json"), force_regenerate: bool = False):
     logger.info(f"Looking for CSV files in: {csv_folder}")
     logger.info(f"CSV folder exists: {csv_folder.exists()}")
     
@@ -112,10 +112,11 @@ def get_all_supplier_kpi_json(csv_folder: Path = Path("results/csv_output"), out
         }
     }
 
+    # Note: AZURE_OPENAI_DEPLOYMENT is not actually used in this function
+    # but keeping the check for future use if needed
     deployment_name = os.getenv("AZURE_OPENAI_DEPLOYMENT")
     if not deployment_name:
-        logger.error("AZURE_OPENAI_DEPLOYMENT environment variable not set")
-        return None
+        logger.warning("AZURE_OPENAI_DEPLOYMENT environment variable not set - continuing without it")
 
     csv_files = list(csv_folder.glob("*.csv"))
     logger.info(f"Found {len(csv_files)} CSV files: {[f.name for f in csv_files]}")
@@ -123,6 +124,31 @@ def get_all_supplier_kpi_json(csv_folder: Path = Path("results/csv_output"), out
     if not csv_files:
         logger.warning("No CSV files found for KPI processing")
         return final_output
+
+    # Check if we can use cached KPI data
+    if not force_regenerate and output_path.exists():
+        # Check if any CSV files are newer than the KPI JSON file
+        kpi_file_mtime = output_path.stat().st_mtime
+        csv_files_modified = False
+        
+        for csv_file in csv_files:
+            if csv_file.stat().st_mtime > kpi_file_mtime:
+                csv_files_modified = True
+                logger.info(f"CSV file {csv_file.name} is newer than KPI cache, regenerating...")
+                break
+        
+        if not csv_files_modified:
+            logger.info("Using cached KPI data - no CSV files have changed")
+            try:
+                with open(output_path, "r", encoding="utf-8") as f:
+                    cached_data = json.load(f)
+                logger.info("Successfully loaded cached KPI data")
+                # Set cache flag for timing data
+                if hasattr(cached_data, '_cache_used'):
+                    cached_data._cache_used = True
+                return cached_data
+            except Exception as e:
+                logger.warning(f"Failed to load cached KPI data: {e}, regenerating...")
 
     processed_count = 0
     for csv_path in csv_files:

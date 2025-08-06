@@ -7,12 +7,14 @@ import os
 import json
 import logging
 import openpyxl
+from datetime import datetime
 
 from sheet_insights.parser import extract_csv, get_sheet_names, normalize_sheet_name
 from sheet_insights.insights import get_insights
 from sheet_insights.general_summary import generate_general_insights
 from sheet_insights.kpi_dashboard import get_all_supplier_kpi_json
 from sheet_insights.additional_insights import generate_additional_insights
+from sheet_insights.dashboard_analytics import generate_dashboard_analytics
 from config import (
     HOST, PORT, DEBUG, UPLOAD_DIR, CSV_DIR, INSIGHTS_FILE, 
     RESULTS_DIR, OUTPUT_JSON, ALLOWED_ORIGINS, LOG_LEVEL, LOG_FORMAT
@@ -34,7 +36,7 @@ app = FastAPI(
 # CORS middleware
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=ALLOWED_ORIGINS,
+    allow_origins=["*"],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -64,22 +66,71 @@ def health_check():
 
 @app.get("/sheet_insights")
 def get_sheet_insights():
-    """Get individual sheet insights for deep dive"""
+    """Get individual sheet insights for deep dive - Currently disabled, only general insights available"""
     try:
-        insights_file = Path('results/insights.json')
-        if not insights_file.exists():
-            raise HTTPException(
-                status_code=404, 
-                detail="Insights file not found. Please upload and process an Excel file first."
-            )
-        
-        with open(insights_file, "r", encoding="utf-8") as f:
-            insights = json.load(f)
-        
-        return {"insights": insights}
+        return {
+            "message": "Individual company insights are disabled. Only general insights are available.",
+            "insights": {},
+            "note": "Use the general insights from the main upload response or generate additional insights."
+        }
     except Exception as e:
         logger.error(f"Error getting sheet insights: {e}")
         raise HTTPException(status_code=500, detail=f"Failed to get sheet insights: {str(e)}")
+
+@app.get("/dashboard")
+def get_dashboard_analytics():
+    """
+    Generate comprehensive dashboard analytics from KPI data
+    Returns chart-ready data for beautiful frontend visualizations
+    """
+    try:
+        # Check if KPI data exists
+        kpi_file = Path('results/final_supplier_kpis.json')
+        if not kpi_file.exists():
+            raise HTTPException(
+                status_code=404,
+                detail="KPI data not found. Please upload and process an Excel file first."
+            )
+
+        logger.info("Generating dashboard analytics...")
+
+        # Generate comprehensive dashboard data
+        dashboard_data = generate_dashboard_analytics()
+
+        if "error" in dashboard_data:
+            raise HTTPException(status_code=500, detail=dashboard_data["error"])
+
+        logger.info("Dashboard analytics generated successfully")
+
+        # Add processing metadata
+        dashboard_data["status"] = "success"
+
+        # Save dashboard data for caching
+        dashboard_file = Path('results/dashboard_analytics.json')
+        with open(dashboard_file, "w", encoding="utf-8") as f:
+            json.dump(dashboard_data, f, indent=2, ensure_ascii=False)
+
+        logger.info(f"Dashboard analytics saved to: {dashboard_file}")
+
+        return {
+            "message": "Dashboard analytics generated successfully",
+            "data": dashboard_data,
+            "totalSuppliers": dashboard_data.get("metadata", {}).get("totalSuppliers", 0),
+            "totalKPIs": dashboard_data.get("metadata", {}).get("totalKPIs", 0),
+            "alertCounts": {
+                "critical": len(dashboard_data.get("alerts", {}).get("critical", [])),
+                "warning": len(dashboard_data.get("alerts", {}).get("warning", [])),
+                "positive": len(dashboard_data.get("alerts", {}).get("positive", []))
+            }
+        }
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error generating dashboard analytics: {e}")
+        import traceback
+        traceback.print_exc()
+        raise HTTPException(status_code=500, detail=f"Failed to generate dashboard analytics: {str(e)}")
 
 @app.post("/generate_more_insights")
 def generate_more_insights():
@@ -89,37 +140,37 @@ def generate_more_insights():
         kpi_file = Path('results/final_supplier_kpis.json')
         if not kpi_file.exists():
             raise HTTPException(
-                status_code=404, 
+                status_code=404,
                 detail="KPI data not found. Please upload and process an Excel file first."
             )
-        
+
         logger.info("Generating additional insights...")
-        
+
         # Generate new additional insights
         additional_insights = generate_additional_insights()
-        
-        # Regenerate sheet insights for fresh perspective
-        logger.info("Regenerating sheet insights...")
-        sheet_insights = get_insights()
-        
-        # Save the new sheet insights
+
+        # Skip regenerating sheet insights - only general insights needed
+        logger.info("Skipping sheet insights regeneration...")
+        sheet_insights = {}
+
+        # Save empty sheet insights
         with open(INSIGHTS_FILE, "w", encoding="utf-8") as f:
             json.dump(sheet_insights, f, indent=2, ensure_ascii=False)
-        
+
         # Load existing general insights
         general_file = Path('results/General-info.json')
         existing_general = []
         if general_file.exists():
             with open(general_file, "r", encoding="utf-8") as f:
                 existing_general = json.load(f)
-        
+
         # Save additional insights to a separate file
         additional_file = Path('results/additional-insights.json')
         with open(additional_file, "w", encoding="utf-8") as f:
             json.dump(additional_insights, f, indent=2, ensure_ascii=False)
-        
+
         logger.info("Additional insights generated successfully")
-        
+
         return {
             "message": "Additional insights generated successfully",
             "additional_insights": additional_insights,
@@ -127,18 +178,29 @@ def generate_more_insights():
             "sheet_insights": sheet_insights,
             "total_additional_insights": len(additional_insights)
         }
-        
+
     except Exception as e:
         logger.error(f"Error generating more insights: {e}")
         raise HTTPException(status_code=500, detail=f"Failed to generate more insights: {str(e)}")
 
 @app.post("/upload_excel/")
-async def upload_excel(file: UploadFile = File(...)):
+async def upload_excel(file: UploadFile = File(...), force_regenerate: bool = False):
     """Upload and process Excel file"""
+    
     if not file.filename.endswith(".xlsx"):
         raise HTTPException(status_code=400, detail="Only .xlsx files are supported.")
 
     file_path = UPLOAD_DIR / file.filename
+    
+    # Remove existing file with the same name if it exists
+    if file_path.exists():
+        try:
+            file_path.unlink()
+            logger.info(f"Removed existing file: {file_path.name}")
+        except Exception as e:
+            logger.warning(f"Failed to remove existing file {file_path.name}: {e}")
+    
+    # Save the new file
     with open(file_path, "wb") as f:
         shutil.copyfileobj(file.file, f)
 
@@ -167,12 +229,26 @@ async def upload_excel(file: UploadFile = File(...)):
                 detail=f"No processable sheets found. Available sheets: {all_sheet_names}. Excluded: {EXCLUDED_SHEETS}"
             )
 
-        # Check for existing CSV files
+        # Check for existing CSV files and only generate missing ones
+        if force_regenerate:
+            logger.info("Force regenerate mode: Removing all existing CSV files...")
+            # Remove all existing CSV files to force regeneration
+            for sheet in sheets_to_process:
+                csv_path = CSV_DIR / normalize_filename(sheet)
+                if csv_path.exists():
+                    try:
+                        csv_path.unlink()
+                        logger.info(f"Removed existing CSV: {csv_path}")
+                    except Exception as e:
+                        logger.warning(f"Failed to remove existing CSV {csv_path}: {e}")
+        
+        logger.info("Checking for existing CSV files...")
+        
         existing_csv_files = []
         missing_csv_files = []
         
         # Check which sheets have meaningful content
-        workbook = openpyxl.load_workbook(str(file_path), read_only=True)
+        workbook = openpyxl.load_workbook(str(file_path), read_only=True, data_only=True)
         sheets_with_content = []
         
         for sheet_name in sheets_to_process:
@@ -193,6 +269,7 @@ async def upload_excel(file: UploadFile = File(...)):
         
         workbook.close()
         
+        # Check which CSV files exist vs need to be created
         for sheet in sheets_to_process:
             csv_path = CSV_DIR / normalize_filename(sheet)
             if csv_path.exists():
@@ -207,9 +284,8 @@ async def upload_excel(file: UploadFile = File(...)):
         logger.info(f"Existing CSV files: {len(existing_csv_files)}")
         logger.info(f"Missing CSV files: {len(missing_csv_files)}")
 
-        # Generate missing CSV files
         if missing_csv_files:
-            logger.info(f"Generating CSV files for sheets: {missing_csv_files}")
+            logger.info(f"Generating missing CSV files for sheets: {missing_csv_files}")
             csv_paths, name_mapping = extract_csv(
                 str(file_path),
                 CSV_DIR,
@@ -224,9 +300,8 @@ async def upload_excel(file: UploadFile = File(...)):
             # Don't fail if no CSV files were generated - this can happen with empty sheets
             if len(actual_csv_paths) == 0:
                 logger.warning("No CSV files were generated. This could be due to sheets having no meaningful content.")
-                logger.warning("Continuing with existing CSV files...")
         else:
-            logger.info("All CSV files already exist. Skipping generation.")
+            logger.info("All required CSV files already exist. Skipping generation.")
             actual_csv_paths = []
             name_mapping = {}
 
@@ -258,28 +333,31 @@ async def upload_excel(file: UploadFile = File(...)):
 
         # Process KPIs and insights
         logger.info("Generating supplier KPI data...")
-        supplier_kpi_info = get_all_supplier_kpi_json()
+        supplier_kpi_info = get_all_supplier_kpi_json(force_regenerate=force_regenerate)
         logger.info("Created final_supplier_kpis.json")
 
-        logger.info("Generating insights...")
-        insights = get_insights()
+        # Skip individual company insights - only generate general insights
+        logger.info("Skipping individual company insights generation...")
+        insights = {}  # Empty insights
         with open(INSIGHTS_FILE, "w", encoding='utf-8') as f:
             json.dump(insights, f, indent=2, ensure_ascii=False)
-        logger.info(f"Saved insights to: {INSIGHTS_FILE}")
+        logger.info(f"Saved empty insights to: {INSIGHTS_FILE}")
 
+        # Generate general insights
         logger.info("Generating general insights...")
         general = generate_general_insights()
 
-        # Load insights for response
+        # Load insights for response (will be empty since we skip individual insights)
         with open(INSIGHTS_FILE, "r", encoding="utf-8") as f:
             insights_content = json.load(f)
-
+        
         logger.info("Processing completed successfully.")
 
         return {
-            "insights": insights_content,
+            "message": "Processing completed - Only general insights generated",
             "general-insights": general,
-            "Supplier-KPIs": supplier_kpi_info
+            "Supplier-KPIs": supplier_kpi_info,
+            "note": "Individual company insights are disabled for faster processing"
         }
 
     except HTTPException:

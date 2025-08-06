@@ -21,7 +21,7 @@ You are an expert data analyst. As input you will get a JSON object of the follo
   },
   "accidents": {
     "Acute_Wiring": {
-      "Jan": 0,
+      "Jan": null,
       "Feb": 0,
       "Mar": 0,
       "Apr": 0,
@@ -49,12 +49,12 @@ You are an expert data analyst. As input you will get a JSON object of the follo
       "Dec": null
     },
     "CAM": {
-      "Jan": 0,
-      "Feb": 2,
-      "Mar": 1,
-      "Apr": 0,
+      "Jan": null,
+      "Feb": 0,
+      "Mar": 2,
+      "Apr": 1,
       "May": 0,
-      "Jun": null,
+      "Jun": 0,
       "Jul": null,
       "Aug": null,
       "Sep": null,
@@ -63,18 +63,18 @@ You are an expert data analyst. As input you will get a JSON object of the follo
       "Dec": null
     },
     "Daxter": {
-      "Jan": 0,
+      "Jan": null,
       "Feb": 0,
       "Mar": 0,
       "Apr": 0,
       "May": 0,
-      "Jun": null,
+      "Jun": 0,
       "Jul": null,
       "Aug": null,
       "Sep": null,
       "Oct": null,
       "Nov": null,
-      "Dec": 0
+      "Dec": null
     },
     "JJ_Tecnoplast": {
       "Jan": null,
@@ -91,12 +91,12 @@ You are an expert data analyst. As input you will get a JSON object of the follo
       "Dec": null
     },
     "Kamal": {
-      "Jan": 0,
+      "Jan": null,
       "Feb": 0,
       "Mar": 0,
-      "Apr": 1,
-      "May": 0,
-      "Jun": null,
+      "Apr": 0,
+      "May": 1,
+      "Jun": 0,
       "Jul": null,
       "Aug": null,
       "Sep": null,
@@ -173,11 +173,25 @@ You are an expert data analyst. As input you will get a JSON object of the follo
       "Oct": null,
       "Nov": null,
       "Dec": null
+    },
+    "Victor_Engineers_ASAL": {
+      "Jan": null,
+      "Feb": 0,
+      "Mar": 0,
+      "Apr": 0,
+      "May": 0,
+      "Jun": 0,
+      "Jul": null,
+      "Aug": null,
+      "Sep": null,
+      "Oct": null,
+      "Nov": null,
+      "Dec": null
     }
   },
   "productionLossHrs": {
     "Acute_Wiring": {
-      "Jan": 0,
+      "Jan": null,
       "Feb": 0,
       "Mar": 0,
       "Apr": 0,
@@ -204,91 +218,6 @@ You are an expert data analyst. As input you will get a JSON object of the follo
       "Nov": null,
       "Dec": null
     },
-    "CAM": {
-      "Jan": 0,
-      "Feb": 0,
-      "Mar": 0,
-      "Apr": 0,
-      "May": 0,
-      "Jun": null,
-      "Jul": null,
-      "Aug": null,
-      "Sep": null,
-      "Oct": null,
-      "Nov": null,
-      "Dec": null
-    },
-    "Daxter": {
-      "Jan": 0,
-      "Feb": 0,
-      "Mar": 0,
-      "Apr": 0,
-      "May": 0,
-      "Jun": null,
-      "Jul": null,
-      "Aug": null,
-      "Sep": null,
-      "Oct": null,
-      "Nov": null,
-      "Dec": null
-    },
-    "JJ_Tecnoplast": {
-      "Jan": null,
-      "Feb": null,
-      "Mar": 0,
-      "Apr": 0,
-      "May": 0,
-      "Jun": 0,
-      "Jul": null,
-      "Aug": null,
-      "Sep": null,
-      "Oct": null,
-      "Nov": null,
-      "Dec": null
-    },
-    "Kamal": {
-      "Jan": 0,
-      "Feb": 0,
-      "Mar": 0,
-      "Apr": 0,
-      "May": 0,
-      "Jun": null,
-      "Jul": null,
-      "Aug": null,
-      "Sep": null,
-      "Oct": null,
-      "Nov": null,
-      "Dec": null
-    },
-    "Laxmi_SPRINGS": {
-      "Jan": null,
-      "Feb": null,
-      "Mar": null,
-      "Apr": 0,
-      "May": 0,
-      "Jun": 0,
-      "Jul": null,
-      "Aug": null,
-      "Sep": null,
-      "Oct": null,
-      "Nov": null,
-      "Dec": null
-    },
-    "Makarjyothi": {
-      "Jan": 0,
-      "Feb": 0,
-      "Mar": 0,
-      "Apr": 0,
-      "May": 0,
-      "Jun": 0,
-      "Jul": null,
-      "Aug": null,
-      "Sep": null,
-      "Oct": null,
-      "Nov": null,
-      "Dec": null
-    }, and so on.
-
 Given the following JSON object of KPI-wise insights, generate exactly 10 deep and comparative insights across all companies and KPIS. Make sure to :
 - Keep the word limit 10-15 words per point.
 - Be specific and grounded in the input data.
@@ -328,11 +257,12 @@ def generate_general_insights():
     response = client.chat.completions.create(
         model=os.getenv("AZURE_OPENAI_DEPLOYMENT"),
         messages=[
-            {"role": "system", "content": "You are a helpful business analyst."},
+            {"role": "system", "content": "You are a helpful business analyst. Be fast and concise."},
             {"role": "user", "content": SUMMARY_PROMPT + f"\n```\n{input_text}\n```"}
         ],
         temperature=0.0,
-        max_tokens=1500
+        max_tokens=1200,  # Reduced for faster processing
+        timeout=30        # Added timeout for faster response
     )
 
     reply = response.choices[0].message.content.strip()

@@ -16,7 +16,7 @@ def normalize_sheet_name(sheet_name: str) -> str:
 def get_sheet_names(file_path):
     """Get all sheet names from Excel file"""
     try:
-        workbook = openpyxl.load_workbook(file_path, read_only=True)
+        workbook = openpyxl.load_workbook(file_path, read_only=True, data_only=True)
         names = workbook.sheetnames
         workbook.close()
         logger.info(f"Found {len(names)} sheets: {names}")
@@ -59,7 +59,7 @@ def extract_csv(file_path, output_dir, sheets_to_process=None, skip_first_sheet=
 
     logger.info(f"Processing {len(target_sheets)} sheet(s): {target_sheets}")
 
-    workbook = openpyxl.load_workbook(file_path, read_only=True)
+    workbook = openpyxl.load_workbook(file_path, read_only=True, data_only=True)
     csv_paths = []
     name_mapping = {}
 
@@ -113,11 +113,25 @@ def extract_csv(file_path, output_dir, sheets_to_process=None, skip_first_sheet=
             with open(csv_path, "w", newline="", encoding="utf-8") as f:
                 writer = csv.writer(f)
                 for row in rows:
-                    padded_row = list(row) + [None] * (max_cols - len(row))
-                    cleaned = [
-                        '' if cell is None or str(cell).strip() == '' else str(cell).strip()
-                        for cell in padded_row
-                    ]
+                    padded_row = list(row)
+                    if len(padded_row) < max_cols:
+                        padded_row.extend([None] * (max_cols - len(padded_row)))
+
+                    cleaned = []
+                    for i, cell in enumerate(padded_row):
+                        if cell is None:
+                            cleaned.append('')
+                        elif isinstance(cell, str) and cell.strip() == '':
+                            cleaned.append('')
+                        elif cell == 0 and i >= 4: 
+ 
+                            if i == 4:  
+                                cleaned.append('')  # Treat as empty
+                            else:
+                                cleaned.append(str(cell).strip())  # Keep as 0
+                        else:
+                            cleaned.append(str(cell).strip())
+
                     writer.writerow(cleaned)
 
             csv_paths.append(csv_path)

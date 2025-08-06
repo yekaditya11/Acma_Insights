@@ -17,10 +17,11 @@ import AutoFixHighIcon from "@mui/icons-material/AutoFixHigh";
 import PictureAsPdfIcon from "@mui/icons-material/PictureAsPdf";
 import EmailIcon from "@mui/icons-material/Email";
 import RestoreIcon from "@mui/icons-material/Restore";
-import TroubleshootIcon from "@mui/icons-material/Troubleshoot";
+
 import EmailClientDialog from "./EmailClientDialog";
 import HiddenPointsDialog from "./HiddenPointsDialog";
-import DeepDiveDialog from "./DeepDiveDialog";
+import Dashboard from "./Dashboard";
+
 import { useDropzone } from "react-dropzone";
 import { useAppContext } from "../context/AppContext";
 import api from "../services/api";
@@ -59,6 +60,7 @@ const MainContent = () => {
     hiddenPoints,
     setHiddenPoints,
     resetState,
+    activeTab,
   } = useAppContext();
 
   // State for personalized insights
@@ -70,14 +72,12 @@ const MainContent = () => {
       return savedPreference ? JSON.parse(savedPreference) : true; // Default to enabled
     }
   );
-  const [feedbackPrompt, setFeedbackPrompt] = useState("");
 
   // State for hidden points dialog
   const [isHiddenPointsDialogOpen, setIsHiddenPointsDialogOpen] =
     useState(false);
 
-  // State for deep dive dialog
-  const [isDeepDiveDialogOpen, setIsDeepDiveDialogOpen] = useState(false);
+
 
   // State for PDF and email features
   const [isPdfGenerating, setIsPdfGenerating] = useState(false);
@@ -86,8 +86,8 @@ const MainContent = () => {
   const [snackbarMessage, setSnackbarMessage] = useState("");
   const [snackbarSeverity, setSnackbarSeverity] = useState("success");
 
-  // Computed property for whether insights should be personalized
-  const isPersonalized = hasPersonalizationData && isPersonalizationEnabled;
+  // Computed property for whether insights should be personalized (unused but kept for future use)
+  // const isPersonalized = hasPersonalizationData && isPersonalizationEnabled;
 
   // Save personalization preference to localStorage
   useEffect(() => {
@@ -118,8 +118,8 @@ const MainContent = () => {
       // Generate prompt enhancement
       const prompt = generatePromptEnhancement(preferences);
 
-      // Update state
-      setFeedbackPrompt(prompt);
+      // Update state (commented out since setFeedbackPrompt was removed)
+      // setFeedbackPrompt(prompt);
 
       // If we have meaningful feedback, mark as having personalization data
       setHasPersonalizationData(prompt.length > 0);
@@ -154,10 +154,10 @@ const MainContent = () => {
       setFileId("processed");
 
       // Extract insights from response and format them for the UI
-      if (response.insights && response["general-insights"]) {
+      if (response["general-insights"]) {
         // Store raw general insights for sentiment display
         const rawGeneralInsights = response["general-insights"] || [];
-        
+
         // Convert sheet insights to summary format expected by UI
         const summaryLines = [];
         let pointCounter = 1;
@@ -174,14 +174,20 @@ const MainContent = () => {
 
         const summaryText = summaryLines.join('\n');
         setSummary(summaryText);
-        
+
         // Store the raw insights and general insights for sentiment display
+        // Include both insights (if any) and general insights data
         setTables({
           ...response.insights || {},
-          rawGeneralInsights: rawGeneralInsights
+          rawGeneralInsights: rawGeneralInsights,
+          // Add a flag to indicate we have processed data
+          hasData: true
         });
 
         console.log("Processed summary:", summaryText);
+        console.log("Raw general insights:", rawGeneralInsights);
+      } else {
+        console.error("No general-insights found in response:", response);
       }
 
     } catch (error) {
@@ -207,10 +213,10 @@ const MainContent = () => {
   });
 
   // Process file (now simplified since upload and process happen together)
-  const processFile = async (id) => {
-    // This function is now mostly handled in onDrop, but keeping for compatibility
-    console.log("Process file called with ID:", id);
-  };
+  // const processFile = async (id) => {
+  //   // This function is now mostly handled in onDrop, but keeping for compatibility
+  //   console.log("Process file called with ID:", id);
+  // };
 
   // Handle feedback for individual points
   const handlePointFeedback = (pointId, isPositive) => {
@@ -599,14 +605,16 @@ const MainContent = () => {
       sx={{
         flexGrow: 1,
         height: "100%",
-        overflow: "hidden",
+        overflow: activeTab === "dashboard" ? "auto" : "hidden",
         display: "flex",
         flexDirection: "column",
         bgcolor: "background.default",
       }}
     >
       {/* Main content */}
-      {!summary ? (
+      {activeTab === "dashboard" ? (
+        <Dashboard />
+      ) : !summary ? (
         <Box
           sx={{
             display: "flex",
@@ -1287,7 +1295,7 @@ const MainContent = () => {
             )}
           </Box>
         </Box>
-      ) : (
+      ) : activeTab === "dashboard" ? null : (
         <Box
           sx={{
             display: "flex",
@@ -1514,31 +1522,7 @@ const MainContent = () => {
                         </Tooltip>
                       )}
 
-                      {/* Deep Dive button */}
-                      <Tooltip title="Deep Dive - View individual sheet insights">
-                        <IconButton
-                          onClick={() => setIsDeepDiveDialogOpen(true)}
-                          size="small"
-                          sx={{
-                            color: (theme) =>
-                              theme.palette.mode === "dark"
-                                ? "#4ade80"
-                                : "#10a37f",
-                            bgcolor: (theme) =>
-                              theme.palette.mode === "dark"
-                                ? "rgba(16, 163, 127, 0.1)"
-                                : "rgba(16, 163, 127, 0.05)",
-                            "&:hover": {
-                              bgcolor: (theme) =>
-                                theme.palette.mode === "dark"
-                                  ? "rgba(16, 163, 127, 0.2)"
-                                  : "rgba(16, 163, 127, 0.1)",
-                            },
-                          }}
-                        >
-                          <TroubleshootIcon fontSize="small" />
-                        </IconButton>
-                      </Tooltip>
+
 
                       {/* PDF download button */}
                       <Tooltip title="Download PDF">
@@ -1937,11 +1921,7 @@ const MainContent = () => {
         </Alert>
       </Snackbar>
 
-      {/* Deep Dive Dialog */}
-      <DeepDiveDialog
-        open={isDeepDiveDialogOpen}
-        onClose={() => setIsDeepDiveDialogOpen(false)}
-      />
+
     </Box>
   );
 };

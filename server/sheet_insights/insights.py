@@ -1,33 +1,19 @@
 import json
-import logging
 from sheet_insights.config import client
 from pathlib import Path
 import os
 import time
 import random
 
-# Configure logging
-logger = logging.getLogger(__name__)
-
 
 INSIGHT_PROMPT = """
-You are a senior data analyst. Based on the json file content given in the input, generate exactly five concise insights per company as a JSON object with sentiment tags.
-You must be fully accurate with dates, figures, and trends — no assumptions or extrapolations.
+Generate exactly 5 concise insights per company for ALL companies in the data. Return as JSON object with company names as keys.
 
-CRITICAL: You MUST generate insights for ALL suppliers/companies present in the data, not just a subset. Every supplier in the input data should have exactly 5 insights.
-
-Instructions:
-- The table contains monthly data in left-to-right order from January to June. Use exact month names from the table when describing trends or numbers.
-- Do NOT infer trends beyond June, and do NOT confuse column positions or assume patterns.
-- Each insight must highlight patterns, trends, gaps, or performance observations strictly from the actual data.
-- Use clear, factual, and precise language — avoid vague phrases like "the data shows" or "it can be seen".
-- For each insight, assign a sentiment tag: "positive", "negative", or "neutral"
-- Positive: Good performance, improvements, zero accidents, high delivery rates, efficiency gains
-- Negative: Poor performance, declines, accidents, low delivery rates, inefficiencies
-- Neutral: No clear positive/negative sentiment, missing data, stable performance
-- Return each insight as an object with "text" and "sentiment" fields
-- Ensure every supplier in the input data gets exactly 5 insights, even if some data is missing or null.
-- For suppliers with all null/missing data, generate insights that acknowledge the lack of data rather than skipping them.
+Rules:
+- Process ALL companies - skip none
+- Use exact data from Jan-Jun only
+- Each insight: {"text": "...", "sentiment": "positive/negative/neutral"}
+- Be factual, concise, fast
 
 here's what the input looks like:
 {
@@ -264,6 +250,7 @@ But i need the output company wise with kpis as its value with each kpi with mon
 
 Only return the JSON array — no markdown, no formatting, no explanations.
 
+Example output Dummy content:
 Example output format:
   "CAM": [
     {"text": "Safety accidents peaked in February with 2 incidents, while January, May, and June reported zero accidents.", "sentiment": "negative"},
@@ -285,82 +272,78 @@ Example output format:
 
 
 def get_insights():
-    """Generate insights for a single sheet with retry logic"""
+    """Generate insights for all companies in one batch"""
 
     kpi_path = os.path.abspath("results/final_supplier_kpis.json")
-    output_path = 'results/insights.json'
 
     try:
         with open(kpi_path, "r", encoding="utf-8") as f:
             data = json.load(f)
     except json.JSONDecodeError as e:
-        logger.error(f"JSON decode error in {kpi_path}: {e}")
+        print(f"❌ JSON decode error in {kpi_path}: {e}")
         return None
-    
-    # Exclude Sheet1 from insights generation
-    excluded_suppliers = ['Sheet1']
-    
-    # Filter out excluded suppliers from the data
+
+    # Filter out Sheet1 from the data before sending to AI
     filtered_data = {}
-    for kpi_name, kpi_data in data.items():
-        if isinstance(kpi_data, dict):
-            filtered_kpi_data = {k: v for k, v in kpi_data.items() if k not in excluded_suppliers}
+    for kpi_name, kpi_values in data.items():
+        if kpi_name in ['generatedOn', 'kpiMetadata']:
+            filtered_data[kpi_name] = kpi_values
+        elif isinstance(kpi_values, dict):
+            # Remove Sheet1 from each KPI section
+            filtered_kpi_data = {k: v for k, v in kpi_values.items() if k != 'Sheet1'}
             filtered_data[kpi_name] = filtered_kpi_data
         else:
-            filtered_data[kpi_name] = kpi_data
-    
+            filtered_data[kpi_name] = kpi_values
+
+    # Get list of companies for verification
+    all_companies = set()
+    for kpi_name, kpi_values in filtered_data.items():
+        if kpi_name in ['generatedOn', 'kpiMetadata']:
+            continue
+        if isinstance(kpi_values, dict):
+            all_companies.update(kpi_values.keys())
+
+    all_companies = sorted(list(all_companies))
+    print(f"📊 Processing {len(all_companies)} companies in one batch: {all_companies}")
+
     json_data_str = json.dumps(filtered_data, ensure_ascii=False, indent=2)
-    logger.info(f"Excluding suppliers from insights: {excluded_suppliers}")
 
-
-            
     deployment_name = os.getenv("AZURE_OPENAI_DEPLOYMENT")
     if not deployment_name:
-        logger.error("AZURE_OPENAI_DEPLOYMENT environment variable not set")
+        print(f"❌ AZURE_OPENAI_DEPLOYMENT environment variable not set")
         return None
 
+    # Enhanced prompt to ensure all companies are processed
+    enhanced_prompt = INSIGHT_PROMPT + f"""
+
+MUST process ALL {len(all_companies)} companies: {', '.join(all_companies)}
+Return JSON: {{"CompanyName": [{{"text": "...", "sentiment": "..."}}, ...], ...}}
+"""
+
     response = client.chat.completions.create(
-    model=deployment_name,
-    messages=[
-        {"role": "system", "content": "You are a helpful data analyst. Generate concise insights for ALL suppliers. Focus on key patterns and trends."},
-        {"role": "user", "content": INSIGHT_PROMPT + f"\n```\n{json_data_str}\n```"}
-    ],
-    temperature=0.0,
-    max_tokens=3000,
-    timeout=45
+        model=deployment_name,
+        messages=[
+            {"role": "system", "content": "You are a helpful data analyst. You must process ALL companies in the data without exception. Return complete JSON for all companies. Be concise and fast."},
+            {"role": "user", "content": enhanced_prompt + f"\n```\n{json_data_str}\n```"}
+        ],
+        temperature=0.0,
+        max_tokens=6000,  # Reduced from 8000 for faster processing
+        timeout=60,       # Reduced from 120 for faster response
+        stream=False      # Ensure no streaming for faster completion
     )
     reply = response.choices[0].message.content.strip()
-    
+
+    # Clean up markdown formatting if present
+    if reply.startswith('```json'):
+        reply = reply.replace('```json', '').replace('```', '').strip()
+    elif reply.startswith('```'):
+        reply = reply.replace('```', '').strip()
+
     try:
-        insights = json.loads(reply)
-        
-        # Validate that we have insights for all suppliers (excluding excluded ones)
-        expected_suppliers = set()
-        for kpi_name, kpi_data in filtered_data.items():
-            if isinstance(kpi_data, dict) and kpi_name not in ['generatedOn', 'kpiMetadata']:
-                expected_suppliers.update(kpi_data.keys())
-        
-        actual_suppliers = set(insights.keys())
-        missing_suppliers = expected_suppliers - actual_suppliers
-        
-        if missing_suppliers:
-            logger.warning(f"Missing insights for suppliers: {missing_suppliers}")
-            logger.warning(f"Expected: {len(expected_suppliers)} suppliers, Got: {len(actual_suppliers)} suppliers")
-            
-            # Add fallback insights for missing suppliers
-            for missing_supplier in missing_suppliers:
-                insights[missing_supplier] = [
-                    {"text": f"No safety accident data available for {missing_supplier}.", "sentiment": "neutral"},
-                    {"text": f"No production loss data available for {missing_supplier}.", "sentiment": "neutral"},
-                    {"text": f"No delivery performance data available for {missing_supplier}.", "sentiment": "neutral"},
-                    {"text": f"No trip data available for {missing_supplier}.", "sentiment": "neutral"},
-                    {"text": f"No machine downtime data available for {missing_supplier}.", "sentiment": "neutral"}
-                ]
-            logger.info(f"Added fallback insights for {len(missing_suppliers)} missing suppliers")
-        
-        return insights
-        
+        result = json.loads(reply)
+        print(f"✅ Successfully generated insights for {len(result)} companies")
+        return result
     except json.JSONDecodeError as e:
-        logger.error(f"Failed to parse insights response: {e}")
-        logger.error(f"Raw response: {reply[:500]}...")
-        return {}
+        print(f"❌ Failed to parse AI response as JSON: {e}")
+        print(f"Raw response: {reply[:500]}...")
+        return None

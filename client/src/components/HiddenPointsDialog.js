@@ -146,7 +146,7 @@ const HiddenPointsDialog = ({
               // Content might be in the format "1. Some insight text"
               const match = point.content.match(/^(\d+)\.\s+(.+)$/);
               let pointText = match ? match[2] : point.content;
-              const pointNumber = match ? match[1] : "";
+              // const pointNumber = match ? match[1] : "";
 
               // Check if the insight is negative by looking for the [NEG] prefix
               const isNegativeInsight = pointText.startsWith("[NEG]");

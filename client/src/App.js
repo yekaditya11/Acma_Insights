@@ -3,7 +3,6 @@ import { CssBaseline, Box } from "@mui/material";
 import { createTheme, ThemeProvider } from "@mui/material/styles";
 import { AppProvider } from "./context/AppContext";
 import MainContent from "./components/MainContent";
-import Dashboard from "./components/Dashboard";
 import Header from "./components/Header";
 import { useAppContext } from "./context/AppContext";
 import "./animations.css";
@@ -163,7 +162,7 @@ const createAppTheme = (mode) =>
 
 // App wrapper that uses context
 function AppWithTheme() {
-  const { darkMode, activeTab, tables } = useAppContext();
+  const { darkMode } = useAppContext();
   const theme = createAppTheme(darkMode ? "dark" : "light");
   
 
@@ -182,13 +181,9 @@ function AppWithTheme() {
       >
         <Header />
         <Box sx={{ flexGrow: 1, overflow: "hidden" }}>
-          {Object.keys(tables).length === 0 ? (
-            // Always show landing page when no data
+          
             <MainContent />
-          ) : (
-            // Show insights or dashboard based on activeTab when data exists
-            activeTab === "insights" ? <MainContent /> : <Dashboard />
-          )}
+          
         </Box>
       </Box>
     </ThemeProvider>
