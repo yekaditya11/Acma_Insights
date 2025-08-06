@@ -7,7 +7,6 @@ import os
 import json
 import logging
 import openpyxl
-import time
 from datetime import datetime
 
 from sheet_insights.parser import extract_csv, get_sheet_names, normalize_sheet_name
@@ -15,6 +14,7 @@ from sheet_insights.insights import get_insights
 from sheet_insights.general_summary import generate_general_insights
 from sheet_insights.kpi_dashboard import get_all_supplier_kpi_json
 from sheet_insights.additional_insights import generate_additional_insights
+from sheet_insights.dashboard_analytics import generate_dashboard_analytics
 from config import (
     HOST, PORT, DEBUG, UPLOAD_DIR, CSV_DIR, INSIGHTS_FILE, 
     RESULTS_DIR, OUTPUT_JSON, ALLOWED_ORIGINS, LOG_LEVEL, LOG_FORMAT
@@ -36,7 +36,7 @@ app = FastAPI(
 # CORS middleware
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=ALLOWED_ORIGINS,
+    allow_origins=["*"],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -49,67 +49,6 @@ for folder in [UPLOAD_DIR, CSV_DIR, RESULTS_DIR]:
 def normalize_filename(sheet_name: str) -> str:
     """Use consistent normalization with parser.py"""
     return normalize_sheet_name(sheet_name) + ".csv"
-
-def save_execution_times(timing_data: dict, output_file: str = "execution_times.md"):
-    """Save execution timing data to a markdown file"""
-    try:
-        timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-        
-        # Create markdown content
-        markdown_content = f"""# Execution Times Report
-
-**Generated on:** {timestamp}
-
-## Summary
-- **Total Execution Time:** {timing_data.get('total_time', 0):.2f} seconds
-- **CSV Generation Time:** {timing_data.get('csv_generation_time', 0):.2f} seconds
-- **KPI Processing Time:** {timing_data.get('kpi_processing_time', 0):.2f} seconds
-- **Insights Generation Time:** {timing_data.get('insights_generation_time', 0):.2f} seconds
-- **General Insights Time:** {timing_data.get('general_insights_time', 0):.2f} seconds
-
-## Detailed Breakdown
-
-### CSV File Generation
-- **Time:** {timing_data.get('csv_generation_time', 0):.2f} seconds
-- **Files Generated:** {timing_data.get('csv_files_generated', 0)}
-- **Files Reused:** {timing_data.get('csv_files_reused', 0)}
-- **Status:** {timing_data.get('csv_status', 'Unknown')}
-
-### KPI Processing
-- **Time:** {timing_data.get('kpi_processing_time', 0):.2f} seconds
-- **Suppliers Processed:** {timing_data.get('suppliers_processed', 0)}
-- **Status:** {timing_data.get('kpi_status', 'Unknown')}
-
-### Insights Generation
-- **Time:** {timing_data.get('insights_generation_time', 0):.2f} seconds
-- **Status:** {timing_data.get('insights_status', 'Unknown')}
-
-### General Insights
-- **Time:** {timing_data.get('general_insights_time', 0):.2f} seconds
-- **Status:** {timing_data.get('general_insights_status', 'Unknown')}
-
-## Performance Notes
-- **Cache Used:** {timing_data.get('cache_used', False)}
-- **Force Regenerate:** {timing_data.get('force_regenerate', False)}
-- **Files Processed:** {timing_data.get('total_files', 0)}
-
----
-*Report generated automatically by the Excel Parser API*
-"""
-        
-        # Save to file
-        output_path = Path("results") / output_file
-        output_path.parent.mkdir(parents=True, exist_ok=True)
-        
-        with open(output_path, "w", encoding="utf-8") as f:
-            f.write(markdown_content)
-        
-        logger.info(f"Execution times saved to: {output_path}")
-        return str(output_path)
-        
-    except Exception as e:
-        logger.error(f"Failed to save execution times: {e}")
-        return None
 
 @app.get("/")
 def read_root():
@@ -127,22 +66,71 @@ def health_check():
 
 @app.get("/sheet_insights")
 def get_sheet_insights():
-    """Get individual sheet insights for deep dive"""
+    """Get individual sheet insights for deep dive - Currently disabled, only general insights available"""
     try:
-        insights_file = Path('results/insights.json')
-        if not insights_file.exists():
-            raise HTTPException(
-                status_code=404, 
-                detail="Insights file not found. Please upload and process an Excel file first."
-            )
-        
-        with open(insights_file, "r", encoding="utf-8") as f:
-            insights = json.load(f)
-        
-        return {"insights": insights}
+        return {
+            "message": "Individual company insights are disabled. Only general insights are available.",
+            "insights": {},
+            "note": "Use the general insights from the main upload response or generate additional insights."
+        }
     except Exception as e:
         logger.error(f"Error getting sheet insights: {e}")
         raise HTTPException(status_code=500, detail=f"Failed to get sheet insights: {str(e)}")
+
+@app.get("/dashboard")
+def get_dashboard_analytics():
+    """
+    Generate comprehensive dashboard analytics from KPI data
+    Returns chart-ready data for beautiful frontend visualizations
+    """
+    try:
+        # Check if KPI data exists
+        kpi_file = Path('results/final_supplier_kpis.json')
+        if not kpi_file.exists():
+            raise HTTPException(
+                status_code=404,
+                detail="KPI data not found. Please upload and process an Excel file first."
+            )
+
+        logger.info("Generating dashboard analytics...")
+
+        # Generate comprehensive dashboard data
+        dashboard_data = generate_dashboard_analytics()
+
+        if "error" in dashboard_data:
+            raise HTTPException(status_code=500, detail=dashboard_data["error"])
+
+        logger.info("Dashboard analytics generated successfully")
+
+        # Add processing metadata
+        dashboard_data["status"] = "success"
+
+        # Save dashboard data for caching
+        dashboard_file = Path('results/dashboard_analytics.json')
+        with open(dashboard_file, "w", encoding="utf-8") as f:
+            json.dump(dashboard_data, f, indent=2, ensure_ascii=False)
+
+        logger.info(f"Dashboard analytics saved to: {dashboard_file}")
+
+        return {
+            "message": "Dashboard analytics generated successfully",
+            "data": dashboard_data,
+            "totalSuppliers": dashboard_data.get("metadata", {}).get("totalSuppliers", 0),
+            "totalKPIs": dashboard_data.get("metadata", {}).get("totalKPIs", 0),
+            "alertCounts": {
+                "critical": len(dashboard_data.get("alerts", {}).get("critical", [])),
+                "warning": len(dashboard_data.get("alerts", {}).get("warning", [])),
+                "positive": len(dashboard_data.get("alerts", {}).get("positive", []))
+            }
+        }
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error generating dashboard analytics: {e}")
+        import traceback
+        traceback.print_exc()
+        raise HTTPException(status_code=500, detail=f"Failed to generate dashboard analytics: {str(e)}")
 
 @app.post("/generate_more_insights")
 def generate_more_insights():
@@ -152,37 +140,37 @@ def generate_more_insights():
         kpi_file = Path('results/final_supplier_kpis.json')
         if not kpi_file.exists():
             raise HTTPException(
-                status_code=404, 
+                status_code=404,
                 detail="KPI data not found. Please upload and process an Excel file first."
             )
-        
+
         logger.info("Generating additional insights...")
-        
+
         # Generate new additional insights
         additional_insights = generate_additional_insights()
-        
-        # Regenerate sheet insights for fresh perspective
-        logger.info("Regenerating sheet insights...")
-        sheet_insights = get_insights()
-        
-        # Save the new sheet insights
+
+        # Skip regenerating sheet insights - only general insights needed
+        logger.info("Skipping sheet insights regeneration...")
+        sheet_insights = {}
+
+        # Save empty sheet insights
         with open(INSIGHTS_FILE, "w", encoding="utf-8") as f:
             json.dump(sheet_insights, f, indent=2, ensure_ascii=False)
-        
+
         # Load existing general insights
         general_file = Path('results/General-info.json')
         existing_general = []
         if general_file.exists():
             with open(general_file, "r", encoding="utf-8") as f:
                 existing_general = json.load(f)
-        
+
         # Save additional insights to a separate file
         additional_file = Path('results/additional-insights.json')
         with open(additional_file, "w", encoding="utf-8") as f:
             json.dump(additional_insights, f, indent=2, ensure_ascii=False)
-        
+
         logger.info("Additional insights generated successfully")
-        
+
         return {
             "message": "Additional insights generated successfully",
             "additional_insights": additional_insights,
@@ -190,7 +178,7 @@ def generate_more_insights():
             "sheet_insights": sheet_insights,
             "total_additional_insights": len(additional_insights)
         }
-        
+
     except Exception as e:
         logger.error(f"Error generating more insights: {e}")
         raise HTTPException(status_code=500, detail=f"Failed to generate more insights: {str(e)}")
@@ -198,25 +186,6 @@ def generate_more_insights():
 @app.post("/upload_excel/")
 async def upload_excel(file: UploadFile = File(...), force_regenerate: bool = False):
     """Upload and process Excel file"""
-    # Initialize timing data
-    timing_data = {
-        'total_time': 0,
-        'csv_generation_time': 0,
-        'kpi_processing_time': 0,
-        'insights_generation_time': 0,
-        'general_insights_time': 0,
-        'csv_files_generated': 0,
-        'csv_files_reused': 0,
-        'cache_used': False,
-        'force_regenerate': force_regenerate,
-        'total_files': 0,
-        'csv_status': 'Unknown',
-        'kpi_status': 'Unknown',
-        'insights_status': 'Unknown',
-        'general_insights_status': 'Unknown'
-    }
-    
-    start_time = time.time()
     
     if not file.filename.endswith(".xlsx"):
         raise HTTPException(status_code=400, detail="Only .xlsx files are supported.")
@@ -315,8 +284,6 @@ async def upload_excel(file: UploadFile = File(...), force_regenerate: bool = Fa
         logger.info(f"Existing CSV files: {len(existing_csv_files)}")
         logger.info(f"Missing CSV files: {len(missing_csv_files)}")
 
-        csv_start_time = time.time()
-        
         if missing_csv_files:
             logger.info(f"Generating missing CSV files for sheets: {missing_csv_files}")
             csv_paths, name_mapping = extract_csv(
@@ -333,19 +300,10 @@ async def upload_excel(file: UploadFile = File(...), force_regenerate: bool = Fa
             # Don't fail if no CSV files were generated - this can happen with empty sheets
             if len(actual_csv_paths) == 0:
                 logger.warning("No CSV files were generated. This could be due to sheets having no meaningful content.")
-            
-            timing_data['csv_files_generated'] = len(actual_csv_paths)
-            timing_data['csv_files_reused'] = len(existing_csv_files)
-            timing_data['csv_status'] = 'Generated new files'
         else:
             logger.info("All required CSV files already exist. Skipping generation.")
             actual_csv_paths = []
             name_mapping = {}
-            timing_data['csv_files_generated'] = 0
-            timing_data['csv_files_reused'] = len(existing_csv_files)
-            timing_data['csv_status'] = 'Used existing files'
-        
-        timing_data['csv_generation_time'] = time.time() - csv_start_time
 
         # Collect all available CSV files
         all_csv_paths = []
@@ -374,60 +332,32 @@ async def upload_excel(file: UploadFile = File(...), force_regenerate: bool = Fa
             )
 
         # Process KPIs and insights
-        kpi_start_time = time.time()
         logger.info("Generating supplier KPI data...")
         supplier_kpi_info = get_all_supplier_kpi_json(force_regenerate=force_regenerate)
         logger.info("Created final_supplier_kpis.json")
-        
 
-        
-        timing_data['kpi_processing_time'] = time.time() - kpi_start_time
-        timing_data['kpi_status'] = 'Completed'
-
-        # Generate insights
-        insights_start_time = time.time()
-        logger.info("Generating insights...")
-        insights = get_insights()
+        # Skip individual company insights - only generate general insights
+        logger.info("Skipping individual company insights generation...")
+        insights = {}  # Empty insights
         with open(INSIGHTS_FILE, "w", encoding='utf-8') as f:
             json.dump(insights, f, indent=2, ensure_ascii=False)
-        logger.info(f"Saved insights to: {INSIGHTS_FILE}")
-        timing_data['insights_generation_time'] = time.time() - insights_start_time
-        timing_data['insights_status'] = 'Completed'
+        logger.info(f"Saved empty insights to: {INSIGHTS_FILE}")
 
         # Generate general insights
-        general_start_time = time.time()
         logger.info("Generating general insights...")
         general = generate_general_insights()
-        timing_data['general_insights_time'] = time.time() - general_start_time
-        timing_data['general_insights_status'] = 'Completed'
 
-        # Load insights for response
+        # Load insights for response (will be empty since we skip individual insights)
         with open(INSIGHTS_FILE, "r", encoding="utf-8") as f:
             insights_content = json.load(f)
-
-        # Calculate total time and finalize timing data
-        timing_data['total_time'] = time.time() - start_time
-        timing_data['total_files'] = len(all_csv_paths)
-        
-        # Save execution times to markdown file
-        timing_file_path = save_execution_times(timing_data)
         
         logger.info("Processing completed successfully.")
-        logger.info(f"Total execution time: {timing_data['total_time']:.2f} seconds")
-        logger.info(f"Execution times saved to: {timing_file_path}")
 
         return {
-            "insights": insights_content,
+            "message": "Processing completed - Only general insights generated",
             "general-insights": general,
             "Supplier-KPIs": supplier_kpi_info,
-            "execution_times": {
-                "total_time": f"{timing_data['total_time']:.2f}s",
-                "csv_generation": f"{timing_data['csv_generation_time']:.2f}s",
-                "kpi_processing": f"{timing_data['kpi_processing_time']:.2f}s",
-                "insights_generation": f"{timing_data['insights_generation_time']:.2f}s",
-                "general_insights": f"{timing_data['general_insights_time']:.2f}s",
-                "timing_report": timing_file_path
-            }
+            "note": "Individual company insights are disabled for faster processing"
         }
 
     except HTTPException:

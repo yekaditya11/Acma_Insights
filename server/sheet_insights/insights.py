@@ -7,15 +7,13 @@ import random
 
 
 INSIGHT_PROMPT = """
-You are a senior data analyst. Based on the json file content given in the input, generate exactly five concise insights per company as a raw JSON array of strings.
-You must be fully accurate with dates, figures, and trends — no assumptions or extrapolations.
+Generate exactly 5 concise insights per company for ALL companies in the data. Return as JSON object with company names as keys.
 
-Instructions:
-- The table contains monthly data in left-to-right order from January to June. Use exact month names from the table when describing trends or numbers.
-- Do NOT infer trends beyond June, and do NOT confuse column positions or assume patterns.
-- Each insight must highlight patterns, trends, gaps, or performance observations strictly from the actual data.
-- Use clear, factual, and precise language — avoid vague phrases like "the data shows" or "it can be seen".
-- Do NOT include object wrappers or labels like "insight"; only return a plain JSON array of 5 strings.
+Rules:
+- Process ALL companies - skip none
+- Use exact data from Jan-Jun only
+- Each insight: {"text": "...", "sentiment": "positive/negative/neutral"}
+- Be factual, concise, fast
 
 here's what the input looks like:
 {
@@ -274,10 +272,9 @@ Example output format:
 
 
 def get_insights():
-    """Generate insights for a single sheet with retry logic"""
+    """Generate insights for all companies in one batch"""
 
     kpi_path = os.path.abspath("results/final_supplier_kpis.json")
-    output_path = 'results/insights.json'
 
     try:
         with open(kpi_path, "r", encoding="utf-8") as f:
@@ -285,25 +282,68 @@ def get_insights():
     except json.JSONDecodeError as e:
         print(f"❌ JSON decode error in {kpi_path}: {e}")
         return None
-    
-    json_data_str = json.dumps(data, ensure_ascii=False, indent=2)
 
+    # Filter out Sheet1 from the data before sending to AI
+    filtered_data = {}
+    for kpi_name, kpi_values in data.items():
+        if kpi_name in ['generatedOn', 'kpiMetadata']:
+            filtered_data[kpi_name] = kpi_values
+        elif isinstance(kpi_values, dict):
+            # Remove Sheet1 from each KPI section
+            filtered_kpi_data = {k: v for k, v in kpi_values.items() if k != 'Sheet1'}
+            filtered_data[kpi_name] = filtered_kpi_data
+        else:
+            filtered_data[kpi_name] = kpi_values
 
-            
+    # Get list of companies for verification
+    all_companies = set()
+    for kpi_name, kpi_values in filtered_data.items():
+        if kpi_name in ['generatedOn', 'kpiMetadata']:
+            continue
+        if isinstance(kpi_values, dict):
+            all_companies.update(kpi_values.keys())
+
+    all_companies = sorted(list(all_companies))
+    print(f"📊 Processing {len(all_companies)} companies in one batch: {all_companies}")
+
+    json_data_str = json.dumps(filtered_data, ensure_ascii=False, indent=2)
+
     deployment_name = os.getenv("AZURE_OPENAI_DEPLOYMENT")
     if not deployment_name:
         print(f"❌ AZURE_OPENAI_DEPLOYMENT environment variable not set")
         return None
 
+    # Enhanced prompt to ensure all companies are processed
+    enhanced_prompt = INSIGHT_PROMPT + f"""
+
+MUST process ALL {len(all_companies)} companies: {', '.join(all_companies)}
+Return JSON: {{"CompanyName": [{{"text": "...", "sentiment": "..."}}, ...], ...}}
+"""
+
     response = client.chat.completions.create(
-    model=deployment_name,
-    messages=[
-        {"role": "system", "content": "You are a helpful data analyst. Respond quickly and concisely."},
-        {"role": "user", "content": INSIGHT_PROMPT + f"\n```\n{json_data_str}\n```"}
-    ],
-    temperature=0.0,
-    max_tokens=1500,
-    timeout=30
+        model=deployment_name,
+        messages=[
+            {"role": "system", "content": "You are a helpful data analyst. You must process ALL companies in the data without exception. Return complete JSON for all companies. Be concise and fast."},
+            {"role": "user", "content": enhanced_prompt + f"\n```\n{json_data_str}\n```"}
+        ],
+        temperature=0.0,
+        max_tokens=6000,  # Reduced from 8000 for faster processing
+        timeout=60,       # Reduced from 120 for faster response
+        stream=False      # Ensure no streaming for faster completion
     )
     reply = response.choices[0].message.content.strip()
-    return json.loads(reply)
+
+    # Clean up markdown formatting if present
+    if reply.startswith('```json'):
+        reply = reply.replace('```json', '').replace('```', '').strip()
+    elif reply.startswith('```'):
+        reply = reply.replace('```', '').strip()
+
+    try:
+        result = json.loads(reply)
+        print(f"✅ Successfully generated insights for {len(result)} companies")
+        return result
+    except json.JSONDecodeError as e:
+        print(f"❌ Failed to parse AI response as JSON: {e}")
+        print(f"Raw response: {reply[:500]}...")
+        return None

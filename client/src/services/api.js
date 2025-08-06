@@ -1,8 +1,8 @@
 import axios from "axios";
 
 // const API_URL = "http://13.51.171.153:5000";
-const API_URL = "http://localhost:8001";
-// const API_URL = "http://16.170.98.127:8001";
+//const API_URL = "http://localhost:9000";
+ const API_URL = "http://13.51.171.153:9000";
 
 const api = {
   // Upload and process Excel file directly
@@ -53,6 +53,17 @@ const api = {
       return { success: true };
     } catch (error) {
       console.error("Saving feedback failed:", error);
+      throw error;
+    }
+  },
+
+  // Get dashboard data
+  getDashboardData: async () => {
+    try {
+      const response = await axios.get(`${API_URL}/dashboard`);
+      return response.data;
+    } catch (error) {
+      console.error("Getting dashboard data failed:", error);
       throw error;
     }
   },

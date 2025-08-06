@@ -6,7 +6,7 @@ from pathlib import Path
 
 # Server settings
 HOST = "0.0.0.0"
-PORT = 8001
+PORT = 9000
 DEBUG = os.getenv("DEBUG", "False").lower() == "true"
 
 # File paths
@@ -18,8 +18,8 @@ INSIGHTS_FILE = RESULTS_DIR / "insights.json"
 OUTPUT_JSON = RESULTS_DIR / "final_supplier_kpis.json"
 
 # Excel processing settings
-EXCLUDED_SHEETS = ['Average Summary', 'Analysis SUMMARY']
-EXCLUDED_SUPPLIERS = ['Sheet1']
+EXCLUDED_SHEETS = ['Average Summary', 'Analysis SUMMARY', 'Sheet1']
+
 
 # API settings
 MAX_FILE_SIZE = 50 * 1024 * 1024  # 50MB

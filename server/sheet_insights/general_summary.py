@@ -257,11 +257,12 @@ def generate_general_insights():
     response = client.chat.completions.create(
         model=os.getenv("AZURE_OPENAI_DEPLOYMENT"),
         messages=[
-            {"role": "system", "content": "You are a helpful business analyst."},
+            {"role": "system", "content": "You are a helpful business analyst. Be fast and concise."},
             {"role": "user", "content": SUMMARY_PROMPT + f"\n```\n{input_text}\n```"}
         ],
         temperature=0.0,
-        max_tokens=1500
+        max_tokens=1200,  # Reduced for faster processing
+        timeout=30        # Added timeout for faster response
     )
 
     reply = response.choices[0].message.content.strip()

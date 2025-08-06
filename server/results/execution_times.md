@@ -1,13 +1,13 @@
 # Execution Times Report
 
-**Generated on:** 2025-08-05 18:17:45
+**Generated on:** 2025-08-07 00:30:50
 
 ## Summary
-- **Total Execution Time:** 38.98 seconds
+- **Total Execution Time:** 5.38 seconds
 - **CSV Generation Time:** 0.00 seconds
 - **KPI Processing Time:** 0.00 seconds
-- **Insights Generation Time:** 25.79 seconds
-- **General Insights Time:** 13.08 seconds
+- **Insights Generation Time:** 0.00 seconds
+- **General Insights Time:** 5.26 seconds
 
 ## Detailed Breakdown
 
@@ -23,11 +23,11 @@
 - **Status:** Completed
 
 ### Insights Generation
-- **Time:** 25.79 seconds
-- **Status:** Completed
+- **Time:** 0.00 seconds
+- **Status:** Skipped - Only general insights generated
 
 ### General Insights
-- **Time:** 13.08 seconds
+- **Time:** 5.26 seconds
 - **Status:** Completed
 
 ## Performance Notes
