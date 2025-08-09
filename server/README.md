@@ -15,25 +15,10 @@ A FastAPI-based server for processing Excel files and generating insights from s
 ### `GET /`
 Redirects to API documentation (Swagger UI)
 
-### `GET /sheet_insights`
-Retrieves individual sheet insights for deep dive analysis.
-
-**Response:**
-```json
-{
-  "insights": {
-    "supplier_name": [
-      {
-        "text": "Insight description",
-        "sentiment": "positive|negative|neutral"
-      }
-    ]
-  }
-}
-```
+<!-- Per-sheet insights have been fully removed from the server -->
 
 ### `POST /upload_excel/`
-Upload and process an Excel file.
+Upload and process an Excel file (processed in-memory; a temporary XLSX is written only for CSV extraction and deleted).
 
 **Parameters:**
 - `file`: Excel file (.xlsx format)
@@ -41,9 +26,9 @@ Upload and process an Excel file.
 **Response:**
 ```json
 {
-  "insights": {...},
-  "general-insights": {...},
-  "Supplier-KPIs": {...}
+  "general-insights": [],
+  "Supplier-KPIs": {"generatedOn": "YYYY-MM-DD", "kpiMetadata": {...}},
+  "ingestion": {"upserted": 123, "batches": 2, "batchSize": 2000, "elapsedSeconds": 1.23}
 }
 ```
 
@@ -56,7 +41,7 @@ Generate additional insights from existing data.
   "message": "Additional insights generated successfully",
   "additional_insights": [...],
   "existing_general_insights": [...],
-  "sheet_insights": {...},
+  "sheet_insights": {},
   "total_additional_insights": 5
 }
 ```
@@ -73,16 +58,15 @@ Generate additional insights from existing data.
    ```
    AZURE_OPENAI_API_KEY=your_azure_openai_api_key
    AZURE_ENDPOINT=your_azure_endpoint
-   AZURE_OPENAI_DEPLOYMENT=your_deployment_name
-   LLAMA_API_KEY=your_llama_api_key
+    AZURE_OPENAI_DEPLOYMENT=your_deployment_name
    ```
 
 3. **Run the server:**
    ```bash
-   python app.py
+    python app.py
    ```
 
-The server will start on `http://localhost:8001`
+The server will start on `http://localhost:8005`
 
 ## Directory Structure
 
@@ -90,25 +74,27 @@ The server will start on `http://localhost:8001`
 server/
 ├── app.py                 # Main FastAPI application
 ├── requirements.txt       # Python dependencies
-├── sheet_insights/       # Core processing modules
-│   ├── __init__.py
-│   ├── config.py         # Configuration and API clients
-│   ├── parser.py         # Excel to CSV conversion
-│   ├── insights.py       # Insights generation
-│   ├── kpi_dashboard.py  # KPI data processing
-│   ├── general_summary.py # General insights
-│   └── additional_insights.py # Additional analysis
-├── uploads/              # Uploaded Excel files
-├── results/              # Generated outputs
-│   ├── csv_output/       # Extracted CSV files
-│   ├── insights.json     # Generated insights
-│   └── final_supplier_kpis.json # KPI data
-└── venv/                 # Virtual environment
+├── controllers/           # Request handlers
+│   ├── upload_controller.py
+│   ├── dashboard_controller.py
+│   └── insights_controller.py
+├── routes/                # APIRouter composition
+│   └── routes.py
+├── services/              # Business logic and integrations
+│   ├── csv_parser.py      # Excel to CSV conversion
+│   ├── kpi_builder.py     # KPI JSON builder
+│   ├── dashboard_logic.py # Dashboard analytics generator
+│   ├── general_summary_service.py
+│   ├── additional_insights_service.py
+│   └── ai_client.py       # Azure OpenAI client
+├── uploads/               # (removed) no longer used; uploads processed in-memory
+├── results/               # Generated outputs (runtime)
+│   └── csv_output/        # Extracted CSV files
 ```
 
 ## Processing Flow
 
-1. **File Upload**: Excel file is uploaded and saved to `uploads/`
+1. **File Upload**: Excel file is uploaded and kept in-memory
 2. **Sheet Extraction**: Excel sheets are converted to CSV files
 3. **KPI Processing**: CSV data is processed to extract KPI metrics
 4. **Insights Generation**: AI-powered insights are generated from KPI data
@@ -135,9 +121,9 @@ The application uses structured logging with different levels:
 
 To run in development mode with auto-reload:
 ```bash
-uvicorn app:app --reload --host 0.0.0.0 --port 8001
+   uvicorn app:app --reload --host 0.0.0.0 --port 8005
 ```
 
 ## API Documentation
 
-Once the server is running, visit `http://localhost:8001/docs` for interactive API documentation. 
+Once the server is running, visit `http://localhost:8005/docs` for interactive API documentation.
