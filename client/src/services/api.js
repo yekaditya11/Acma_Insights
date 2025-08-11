@@ -6,7 +6,7 @@
 import axios from 'axios';
 // requestOptimizer removed
 
-const API_BASE_URL ='http://13.50.248.45:8001';
+const API_BASE_URL ='http://13.51.171.153:8001';
 
 //const API_BASE_URL ='http://localhost:8005';
 
