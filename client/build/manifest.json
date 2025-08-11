@@ -1,25 +1,25 @@
 {
-  "short_name": "ACMA Insights",
-  "name": "ACMA Data Insights",
+  "short_name": "ACMA",
+  "name": "ACMA - AI-powered Safety Management System",
   "icons": [
     {
-      "src": "ai_icon.png",
+      "src": "SafetyConnect_Icon.svg",
       "sizes": "64x64 32x32 24x24 16x16",
-      "type": "image/png"
+      "type": "image/svg+xml"
     },
     {
-      "src": "ai_icon.png",
-      "type": "image/png",
+      "src": "SafetyConnect_Icon.svg",
+      "type": "image/svg+xml",
       "sizes": "192x192"
     },
     {
-      "src": "ai_icon.png",
-      "type": "image/png",
+      "src": "SafetyConnect_Icon.svg",
+      "type": "image/svg+xml",
       "sizes": "512x512"
     }
   ],
   "start_url": ".",
   "display": "standalone",
-  "theme_color": "#000000",
-  "background_color": "#ffffff"
+  "theme_color": "#092f57",
+  "background_color": "#f8fafc"
 }

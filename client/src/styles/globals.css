@@ -1,0 +1,318 @@
+/* Global Styles for Safety Connect Dashboard */
+
+/* Reset and base styles */
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  font-family: 'Roboto', -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Oxygen',
+    'Ubuntu', 'Cantarell', 'Fira Sans', 'Droid Sans', 'Helvetica Neue',
+    sans-serif;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  background-color: #f8fafc;
+}
+
+/* Custom Dashboard Drag and Drop Styles */
+.dragging {
+  cursor: grabbing !important;
+  user-select: none;
+}
+
+.dragging * {
+  cursor: grabbing !important;
+  /* Keep pointer events enabled for chart visibility */
+  pointer-events: auto;
+}
+
+/* Chart container drag styles */
+.chart-draggable {
+  transition: all 0.2s ease;
+}
+
+.chart-draggable:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1);
+}
+
+.chart-draggable:active {
+  cursor: grabbing !important;
+}
+
+/* Drag drop zone indicators */
+.drag-over {
+  border: 2px dashed #3b82f6 !important;
+  background-color: rgba(59, 130, 246, 0.1) !important;
+}
+
+.drag-over::before {
+  content: "Drop here";
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  background: rgba(59, 130, 246, 0.9);
+  color: white;
+  padding: 8px 16px;
+  border-radius: 4px;
+  font-size: 14px;
+  font-weight: 500;
+  z-index: 1000;
+  pointer-events: none;
+}
+
+/* Disable text selection during drag but keep chart visibility */
+.dragging * {
+  -webkit-user-select: none;
+  -moz-user-select: none;
+  -ms-user-select: none;
+  user-select: none;
+  /* Ensure charts remain visible during drag */
+  visibility: visible !important;
+  opacity: 1 !important;
+}
+
+/* Specific rules for chart components during drag */
+.dragging .plotly,
+.dragging .echarts-for-react,
+.dragging [data-chart-index] {
+  visibility: visible !important;
+  opacity: 1 !important;
+  background: white !important;
+  color: inherit !important;
+}
+
+/* Ensure chart containers maintain their appearance during drag */
+.dragging .MuiCard-root {
+  background: white !important;
+  border: 1px solid #e5e7eb !important;
+}
+
+.dragging .MuiCardContent-root {
+  background: white !important;
+}
+
+/* Chart interaction styles */
+.chart-container {
+  position: relative;
+  overflow: hidden;
+}
+
+.chart-container.edit-mode {
+  pointer-events: auto; /* Keep charts interactive in edit mode */
+}
+
+.chart-container.edit-mode .chart-content {
+  pointer-events: auto; /* Keep chart content visible and interactive */
+}
+
+/* Smooth transitions for all interactive elements */
+* {
+  transition: all 0.2s ease;
+}
+
+/* Custom scrollbar */
+::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+
+::-webkit-scrollbar-track {
+  background: #f1f1f1;
+  border-radius: 4px;
+}
+
+::-webkit-scrollbar-thumb {
+  background: #c1c1c1;
+  border-radius: 4px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: #a8a8a8;
+}
+
+/* Loading animations */
+@keyframes pulse {
+  0%, 100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.5;
+  }
+}
+
+.pulse {
+  animation: pulse 2s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+}
+
+/* Fade in animation */
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+    transform: translateY(20px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.fade-in {
+  animation: fadeIn 0.5s ease-out;
+}
+
+/* Chart hover effects */
+.chart-card:hover {
+  transform: translateY(-4px);
+  box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.1), 0 10px 10px -5px rgba(0, 0, 0, 0.04);
+}
+
+/* Edit mode visual indicators */
+.edit-mode .chart-card {
+  border: 2px dashed #e0e7ff;
+  position: relative;
+}
+
+.edit-mode .chart-card::after {
+  content: "Drag to reorder";
+  position: absolute;
+  top: -10px;
+  right: 10px;
+  background: #059669;
+  color: white;
+  padding: 4px 8px;
+  border-radius: 4px;
+  font-size: 10px;
+  font-weight: 500;
+  opacity: 0;
+  transition: opacity 0.2s ease;
+}
+
+.edit-mode .chart-card:hover::after {
+  opacity: 1;
+}
+
+/* Responsive design improvements */
+@media (max-width: 768px) {
+  .chart-card {
+    margin-bottom: 16px;
+  }
+  
+  .edit-mode .chart-card::after {
+    display: none;
+  }
+}
+
+/* Accessibility improvements */
+@media (prefers-reduced-motion: reduce) {
+  * {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+}
+
+/* High contrast mode support */
+@media (prefers-contrast: high) {
+  .chart-card {
+    border: 2px solid #000;
+  }
+  
+  .edit-mode .chart-card {
+    border: 3px dashed #000;
+  }
+}
+
+/* Chart container sharp corners override */
+.chart-container,
+.chart-container *,
+[data-chart-index],
+[data-chart-index] *,
+.plotly,
+.plotly *,
+.echarts-for-react,
+.echarts-for-react *,
+.MuiCard-root[data-chart-index],
+.MuiCard-root[data-chart-index] *,
+.MuiCardContent-root[data-chart-index],
+.MuiCardContent-root[data-chart-index] * {
+  border-radius: 2px !important;
+  border-top-left-radius: 2px !important;
+  border-top-right-radius: 2px !important;
+  border-bottom-left-radius: 2px !important;
+  border-bottom-right-radius: 2px !important;
+}
+
+/* Dashboard chart specific overrides */
+[data-dashboard-container] .MuiCard-root,
+[data-dashboard-container] .MuiCardContent-root,
+[data-dashboard-container] .plotly,
+[data-dashboard-container] .echarts-for-react,
+[data-dashboard-container] [data-chart-index],
+[data-dashboard-container] [data-chart-index] * {
+  border-radius: 2px !important;
+  border-top-left-radius: 2px !important;
+  border-top-right-radius: 2px !important;
+  border-bottom-left-radius: 2px !important;
+  border-bottom-right-radius: 2px !important;
+}
+
+/* Main dashboard specific overrides */
+.MuiGrid-container .MuiCard-root,
+.MuiGrid-container .MuiCardContent-root,
+.MuiGrid-container .echarts-for-react,
+.MuiGrid-container .plotly,
+.MuiGrid-container .MuiAlert-root {
+  border-radius: 2px !important;
+  border-top-left-radius: 2px !important;
+  border-top-right-radius: 2px !important;
+  border-bottom-left-radius: 2px !important;
+  border-bottom-right-radius: 2px !important;
+}
+
+/* KPI cards and chart cards specific overrides */
+.motion-div .MuiCard-root,
+.motion-div .MuiCardContent-root,
+.motion-div .echarts-for-react,
+.motion-div .plotly {
+  border-radius: 2px !important;
+  border-top-left-radius: 2px !important;
+  border-top-right-radius: 2px !important;
+  border-bottom-left-radius: 2px !important;
+  border-bottom-right-radius: 2px !important;
+}
+
+/* AI Icon specific styles - ensure no borders */
+img[src*="ai-insights-icon.gif"],
+img[alt*="AI Insights Assistant"] {
+  border: none !important;
+  outline: none !important;
+  box-shadow: none !important;
+  padding: 0 !important;
+  margin: 0 !important;
+  background-color: transparent !important;
+  mix-blend-mode: multiply; /* Helps blend away white background */
+  filter: brightness(1.1) contrast(1.1); /* Enhance the icon appearance */
+}
+
+/* Enhanced AI Insights Icon styles for better white background removal */
+.ai-insights-icon-enhanced {
+  /* Remove any white background from the GIF */
+  background: transparent !important;
+  /* Improve icon visibility and contrast */
+  filter: brightness(1.05) contrast(1.15) saturate(1.1) !important;
+  /* Better blending to remove white areas */
+  mix-blend-mode: multiply !important;
+  /* Ensure smooth rendering */
+  image-rendering: -webkit-optimize-contrast !important;
+  image-rendering: crisp-edges !important;
+  /* Animation for hover effect */
+  transition: transform 0.2s ease, filter 0.2s ease !important;
+}
+
+.ai-insights-icon-enhanced:hover {
+  transform: scale(1.35) !important;
+  filter: brightness(1.1) contrast(1.2) saturate(1.15) !important;
+}

@@ -1,0 +1,109 @@
+{
+  "history": [],
+  "question": "what is the trends of the accidents over past 6 months?",
+  "intent": "system_query",
+  "semantic_info": {
+    "table": "supplier_kpi_monthly",
+    "table_comment": "Monthly supplier KPIs captured per month with a unique constraint on (supplier_name, kpi_name, year, month).",
+    "columns": [
+      {
+        "name": "id",
+        "type": "BIGINT",
+        "nullable": false,
+        "description": "Surrogate primary key for the row.",
+        "is_primary_key": true,
+        "is_foreign_key": false
+      },
+      {
+        "name": "supplier_name",
+        "type": "TEXT",
+        "nullable": false,
+        "description": "Supplier identifier/name to which the KPI value applies. | Sample values: Acute_Wiring, Ankita_Auto, CAM, Daxter, JJ_Tecnoplast, Kamal, Laxmi_SPRINGS, Makarjyothi, S_B_Precision_Springs, Shree_Stamping, Unique_Systems, Victor_Engineers_ASAL",
+        "is_primary_key": false,
+        "is_foreign_key": false
+      },
+      {
+        "name": "kpi_name",
+        "type": "TEXT",
+        "nullable": false,
+        "description": "Name of the KPI metric| Sample values: accidents, machineBreakdowns, machineDowntimeHrs, okDeliveryPercent, partsPerTrip, productionLossHrs, quantityShipped, trips, vehicleTAT",
+        "is_primary_key": false,
+        "is_foreign_key": false
+      },
+      {
+        "name": "year",
+        "type": "INTEGER",
+        "nullable": false,
+        "description": "Calendar year of the KPI measurement.",
+        "is_primary_key": false,
+        "is_foreign_key": false
+      },
+      {
+        "name": "month",
+        "type": "SMALLINT",
+        "nullable": false,
+        "description": "Calendar month of the KPI measurement (1-12).",
+        "is_primary_key": false,
+        "is_foreign_key": false
+      },
+      {
+        "name": "value",
+        "type": "NUMERIC",
+        "nullable": true,
+        "description": "Numeric KPI value for the supplier and month.",
+        "is_primary_key": false,
+        "is_foreign_key": false
+      },
+      {
+        "name": "unit",
+        "type": "TEXT",
+        "nullable": true,
+        "description": "Unit of measure for the KPI value| Sample values: Number of parts shipped by the supplier, Number of shipment trips completed per month, Production hours lost due to supplier-caused material shortage, Efficiency metric showing avg. parts shipped per trip, Number of safety incidents reported, Number of machine breakdowns, Machine breakdown time (in hours), Average vehicle turnaround time at the plant (in hours), Percentage of OK deliveries based on ACMA standards",
+        "is_primary_key": false,
+        "is_foreign_key": false
+      },
+      {
+        "name": "generated_on",
+        "type": "DATE",
+        "nullable": true,
+        "description": "Date the KPI value was generated or sourced.",
+        "is_primary_key": false,
+        "is_foreign_key": false
+      },
+      {
+        "name": "created_at",
+        "type": "TIMESTAMP",
+        "nullable": false,
+        "description": "Timestamp when the record was inserted.",
+        "is_primary_key": false,
+        "is_foreign_key": false
+      }
+    ],
+    "constraints": {
+      "primary_key": [
+        "id"
+      ],
+      "unique": [
+        [
+          "supplier_name",
+          "kpi_name",
+          "year",
+          "month"
+        ]
+      ],
+      "checks": [
+        {
+          "name": "supplier_kpi_monthly_month_check",
+          "sqltext": "month >= 1 AND month <= 12"
+        }
+      ],
+      "foreign_keys": []
+    }
+  },
+  "sql_query": "",
+  "query_result": [],
+  "query_error_message": "",
+  "needs_clarification": false,
+  "visualization_data": {},
+  "final_answer": ""
+}

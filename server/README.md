@@ -1,3 +1,66 @@
+## Table Introspection Utility
+
+Use `table_introspect.py` to extract a table's CREATE TABLE DDL and JSON semantics (columns with name, type, nullable, default, description, PK/FK, plus table constraints).
+
+Prerequisites: Ensure `SQLAlchemy` and your DB driver are installed. This repo already pins them in `requirements.txt` for PostgreSQL via `psycopg2-binary`.
+
+### Usage
+
+Set your database URL in the environment or pass with `--db`:
+
+```
+export DATABASE_URL="postgresql+psycopg2://user:pass@host:5432/dbname"
+python table_introspect.py --schema public --table your_table --pretty
+```
+
+Write to a file:
+
+```
+python table_introspect.py --schema public --table your_table --pretty --out results/your_table_schema.json
+```
+
+Output JSON shape:
+
+```
+{
+  "ddl": "CREATE TABLE ...",
+  "semantics": {
+    "schema": "public",
+    "table": "your_table",
+    "table_comment": "...",
+    "columns": [
+      {
+        "name": "id",
+        "type": "INTEGER",
+        "nullable": false,
+        "default": null,
+        "description": "Primary key",
+        "is_primary_key": true,
+        "is_foreign_key": false
+      }
+    ],
+    "constraints": {
+      "primary_key": ["id"],
+      "unique": [["col_a", "col_b"]],
+      "checks": [{ "name": "chk_positive", "sqltext": "(amount > 0)" }],
+      "foreign_keys": [
+        {
+          "name": "fk_example",
+          "constrained_columns": ["user_id"],
+          "referred_schema": "public",
+          "referred_table": "users",
+          "referred_columns": ["id"]
+        }
+      ]
+    }
+  }
+}
+```
+
+Notes:
+- Column `description` is sourced from DB comments if available.
+- DDL generation covers table definition and constraints present on the table. Indexes may not be included.
+
 # Excel Parser API Server
 
 A FastAPI-based server for processing Excel files and generating insights from supplier KPI data.

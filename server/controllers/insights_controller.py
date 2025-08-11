@@ -3,11 +3,44 @@ from pathlib import Path
 import json
 import logging
 from services.additional_insights_service import generate_additional_insights
+from services.general_summary_service import generate_general_insights
 from config import RESULTS_DIR
 
 logger = logging.getLogger(__name__)
 
 router = APIRouter()
+
+
+@router.get("/insights")
+def get_general_insights(refresh: bool = False):
+    try:
+        kpi_file = RESULTS_DIR / 'final_supplier_kpis.json'
+        if not kpi_file.exists():
+            raise HTTPException(status_code=404, detail="KPI data not found. Please upload and process an Excel file first.")
+
+        general_file = RESULTS_DIR / 'General-info.json'
+
+        if not refresh and general_file.exists():
+            with open(general_file, "r", encoding="utf-8") as f:
+                general_insights = json.load(f)
+            return {
+                "message": "General insights loaded successfully",
+                "general_insights": general_insights,
+                "total_general_insights": len(general_insights) if isinstance(general_insights, list) else 0,
+            }
+
+        # Generate (or regenerate) general insights
+        general_insights = generate_general_insights()
+        return {
+            "message": "General insights generated successfully",
+            "general_insights": general_insights,
+            "total_general_insights": len(general_insights) if isinstance(general_insights, list) else 0,
+        }
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.exception("Error getting general insights")
+        raise HTTPException(status_code=500, detail=f"Failed to get general insights: {str(e)}")
 
 
 @router.post("/generate_more_insights")
