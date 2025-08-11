@@ -6,7 +6,7 @@ from pathlib import Path
 
 # Server settings
 HOST = "0.0.0.0"
-PORT = 8005
+PORT = 8001
 DEBUG = os.getenv("DEBUG", "False").lower() == "true"
 
 # File paths
